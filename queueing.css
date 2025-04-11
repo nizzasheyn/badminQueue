@@ -44,7 +44,7 @@ button {
     transition: background-color 0.3s ease;
     position: sticky;
     top: 50px;
-    left: 50px;
+    left: 20px;
     z-index: 10;
 }
 
@@ -187,12 +187,13 @@ label {
     border-left: 1px solid #ddd;
 }
 
-@media (min-width: 800px) {
+@media screen and (min-width: 800px) {
     body {
         margin: 50px;
     }
 
     button {
-        left: 20px;
+        position: sticky;
+        left: 50px;
     }
 }
