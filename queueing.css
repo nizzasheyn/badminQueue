@@ -191,4 +191,8 @@ label {
     body {
         margin: 50px;
     }
+
+    button {
+        left: 20px;
+    }
 }
