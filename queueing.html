@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badminton Queueing</title>
+    <link rel="stylesheet" href="queueing.css">
+    <script src="queueing.js" defer></script>
+</head>
+<body>
+
+    <div class="container">
+        <h2 class="header-bar">Badminton Queueing</h2>
+
+        <!-- Game Settings Form -->
+        <label for="players">Enter players (comma separated):</label>
+        <input type="text" id="players" placeholder="Player1, Player2, Player3, Player4, ...">
+
+        <!-- <label for="gameDate">Game Date:</label>
+        <input type="date" id="gameDate">
+
+        <label for="location">Location:</label>
+        <input type="text" id="location" placeholder="Enter location"> -->
+
+        <label for="numCourts">Number of Courts:</label>
+        <input type="number" id="numCourts" min="1" placeholder="Enter number of courts">
+
+		<div id="notification" class="notification"></div>
+
+        <button onclick="generateFirstGame()" class="header-bar">Generate Game</button>
+
+        <!-- Game Results Table -->
+        <table id="gameTable" class="game-table-class">
+            <thead>
+				<tr>
+					<th>Game #</th>
+					<th>Court #</th>
+					<th>Players</th>
+					<th>Actions</th>
+				</tr>
+			</thead>			
+            <tbody>
+                <!-- Game result will appear here -->
+            </tbody>
+        </table>
+
+        <table id="gameSummary" class="game-summary-class">
+			<thead>
+				<tr id="summaryHeader">
+					<th>Player</th>
+					<th>Total</th>
+					<th>Game #</th>
+					<!-- Game columns will be added dynamically -->
+				</tr>
+			</thead>
+			<tbody id="summaryBody">
+				<!-- Player rows will be added dynamically -->
+			</tbody>
+		</table>		
+    </div>
+
+	<script>
+		document.addEventListener('DOMContentLoaded', () => {
+			const gameTableBody = document.querySelector('#gameTable tbody');
+			const summaryBody = document.querySelector('#summaryBody');
+		
+			if (gameTableBody.children.length === 0) {
+				const placeholder = document.createElement('tr');
+				placeholder.classList.add('placeholder-row');
+				placeholder.innerHTML = `<td colspan="3" style="text-align:center; color: #7A7A7A;">No game data available</td>`;
+				gameTableBody.appendChild(placeholder);
+			}
+		
+			if (summaryBody.children.length === 0) {
+				const placeholder = document.createElement('tr');
+				placeholder.classList.add('placeholder-row');
+				placeholder.innerHTML = `<td colspan="3" style="text-align:center; color: #7A7A7A;">No summary available</td>`;
+				summaryBody.appendChild(placeholder);
+			}
+		});
+	</script>
+		
+</body>
+</html>
