@@ -18,7 +18,7 @@ body {
     background-position: center;
     background-attachment: fixed;
     background-repeat: no-repeat;
-    margin: 50px;
+    margin: 20px;
     padding: 0;
 }
 
@@ -187,4 +187,8 @@ label {
     border-left: 1px solid #ddd;
 }
 
-
+@media (min-width: 1200px) {
+    .body {
+        margin: 50px;
+    }
+}
