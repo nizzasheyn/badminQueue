@@ -1,4 +1,4 @@
-function generateFirstGame() {
+async function generateFirstGame() {
 
     let numCourts = getNumCourtsFromSettings();
     let playersRange = getPlayersFromSettings();
@@ -23,9 +23,47 @@ function generateFirstGame() {
         }
     });
 
+    // Identify players already queued in unstarted games
+    let reservedPlayers = new Set();
+    let lastUnstartedGamePlayers = [];
+
+    const rows = document.querySelectorAll("#gameTable tbody tr");
+    for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        const input = row.cells[2]?.querySelector("input");
+
+        if (input) {
+            const names = input.value.split(",").map(name => name.trim()).filter(Boolean);
+            names.forEach(name => reservedPlayers.add(name));
+
+            // Save the most recent unstarted game's players
+            if (lastUnstartedGamePlayers.length === 0) {
+                lastUnstartedGamePlayers = [...names];
+            }
+        }
+    }
+
+    // Build preferred and fallback lists without mutating availablePlayers
+    let preferredPlayers = [];
+    let fallbackPlayers = [];
+
+    playersRange.forEach(player => {
+        if (!player) return;
+
+        const isReserved = reservedPlayers.has(player);
+        const isInLastUnstarted = lastUnstartedGamePlayers.includes(player);
+
+        if (!isReserved) {
+            preferredPlayers.push(player);
+        } else if (!isInLastUnstarted) {
+            fallbackPlayers.push(player);
+        }
+    });
+
+    // Combine into final list of players to consider
+    availablePlayers = [...preferredPlayers, ...fallbackPlayers];
+
     // Determine game number based on current rows in the game table
-    const gameTableBody = document.querySelector("#gameTable tbody");
-    const rows = gameTableBody.querySelectorAll("tr");
     const existingGames = rows.length;
     gameNumber = existingGames + 1;
 
@@ -48,6 +86,7 @@ function generateFirstGame() {
     // Find min games played
     const minCount = Math.min(...Object.values(gameCount));
 
+    console.log('$$availablePlayers', availablePlayers);
     // Collect players with the lowest game count
     let selectedIndexes = [];
     availablePlayers.forEach((player, i) => {
@@ -109,8 +148,9 @@ function generateFirstGame() {
     }
 
     // Output to Queueing sheet
-    outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers);
-
+    await outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers);
+    
+    updateGameSummaryTable(selectedPlayers);
 }
 
 // Helper: check if index is already selected
@@ -177,8 +217,8 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
         const inputField = newRow.querySelector("input");
         const newPlayers = inputField.value.trim();
 
-        if (newPlayers === "") {
-            alert("Player list cannot be empty.");
+        if (newPlayers === "" || newPlayers.split(",").length != 4) {
+            showNotification("Player list must have 4 players.");
             return;
         }
 
@@ -189,13 +229,11 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
         // Remove start button
         startBtn.remove();
 
-        // Optionally: update summary table
-        updateGameSummaryTable();
+        updateGameSummaryTable(selectedPlayers);
     });
 }
 
-
-function updateGameSummaryTable() {
+function updateGameSummaryTable(selectedPlayers) {
     const gameTableBody = document.querySelector("#gameTable tbody");
     const summaryHeader = document.getElementById("summaryHeader");
     const summaryBody = document.getElementById("summaryBody");
@@ -203,12 +241,12 @@ function updateGameSummaryTable() {
     const rows = gameTableBody.querySelectorAll("tr");
 
     // Build set of all players
-    const playerSet = new Set();
-    rows.forEach(row => {
-        const players = row.cells[2].textContent.split(',').map(p => p.trim());
-        players.forEach(p => playerSet.add(p));
-    });
-
+    const playerSet = getPlayersFromSettings();
+    // rows.forEach(row => {
+    //     const players = row.cells[2].textContent.split(',').map(p => p.trim());
+    //     players.forEach(p => playerSet.add(p));
+    // });
+    console.log('$$playerSet -->', playerSet);
     const allPlayers = Array.from(playerSet).sort(); // Optional: sorted player list
     const gameCount = rows.length;
 
@@ -220,6 +258,9 @@ function updateGameSummaryTable() {
     for (let i = 1; i <= gameCount; i++) {
         const th = document.createElement('th');
         th.textContent = `${i}`;
+        th.style.width = '42.5px';
+        th.style.padding = '12px 0';
+        th.style.textAlign = 'center';
         summaryHeader.appendChild(th);
     }
 
@@ -235,7 +276,15 @@ function updateGameSummaryTable() {
         // Total games played cell
         let totalGames = 0;
         rows.forEach(row => {
-            const playersInGame = row.cells[2].textContent.split(',').map(p => p.trim());
+            let playersInGame = [];
+            const playersCell = row.cells[2];
+            const input = playersCell.querySelector("input");
+            if (input) {
+                playersInGame = input.value.split(',').map(p => p.trim());
+            } else {
+                playersInGame = playersCell.textContent.split(',').map(p => p.trim());
+            }
+
             if (playersInGame.includes(player)) {
                 totalGames++;
             }
@@ -248,10 +297,24 @@ function updateGameSummaryTable() {
         // Cells for each game
         rows.forEach(row => {
             const td = document.createElement('td');
-            const playersInGame = row.cells[2].textContent.split(',').map(p => p.trim());
-            if (playersInGame.includes(player)) {
-                td.style.backgroundColor = '#a18cbc';
+
+            let playersInGame = [];
+            const playersCell = row.cells[2];
+            const input = playersCell.querySelector("input");
+            if (input) {
+                playersInGame = input.value.split(',').map(p => p.trim());
+            } else {
+                playersInGame = playersCell.textContent.split(',').map(p => p.trim());
             }
+
+            const isGameStarted = !row.cells[2].querySelector("input");
+
+            if (playersInGame.includes(player)) {
+                td.style.backgroundColor = isGameStarted ? '#a18cbc' : '#c4c3d0';
+                td.style.width = '42.5px';
+                td.style.padding = '12px 0';
+            }
+
             tr.appendChild(td);
         });
 
