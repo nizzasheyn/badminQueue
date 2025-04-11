@@ -187,8 +187,8 @@ label {
     border-left: 1px solid #ddd;
 }
 
-@media (min-width: 1200px) {
-    .body {
+@media (min-width: 800px) {
+    body {
         margin: 50px;
     }
 }
