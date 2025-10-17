@@ -205,7 +205,6 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
         </td>
         <td>
             <button class="start-btn" style="padding: 6px 12px;">Start</button>
-            <button class="edit-btn hide-edit" style="padding: 6px 12px;">Edit</button>
         </td>
     `;
 
@@ -215,7 +214,7 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
     // Handle Start button click
     const inputField = newRow.querySelector("input");
     const startBtn = newRow.querySelector(".start-btn");
-    const editBtn = newRow.querySelector('.edit-btn');
+    //const editBtn = newRow.querySelector('.edit-btn');
     startBtn.addEventListener("click", () => {
         const newPlayers = inputField.value.trim();
 
@@ -230,13 +229,13 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
 
         // Remove start button
         startBtn.remove();
-        editBtn.classList.remove("hide-edit");
-        editBtn.classList.add("show-edit");
+        //editBtn.classList.remove("hide-edit");
+        //editBtn.classList.add("show-edit");
 
         updateGameSummaryTable(selectedPlayers);
     });
 
-    editBtn.addEventListener("click", () => {
+    /*editBtn.addEventListener("click", () => {
         // Get the Players <td> in this specific row
         const playersTd = newRow.querySelector("td:nth-child(3)");
         const currentPlayers = playersTd.textContent.trim();
@@ -280,7 +279,7 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
 
             updateGameSummaryTable();
         });
-    });
+    });*/
 }
 
 function updateGameSummaryTable(selectedPlayers) {
@@ -398,6 +397,7 @@ function showEmptySummaryMessage() {
 
     summaryBody.appendChild(row);
 }
+
 
 
 
