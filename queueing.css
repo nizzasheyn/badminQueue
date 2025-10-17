@@ -113,6 +113,14 @@ label {
     margin-top: 50px;
 }
 
+.hide-edit {
+    display: none;
+}
+
+.show-btn {
+    display: inline-block;
+}
+
 .notification {
     display: none;
     background-color: #f8d7da;
@@ -197,3 +205,4 @@ label {
         left: 50px;
     }
 }
+
