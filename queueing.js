@@ -213,10 +213,10 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
     gameTableBody.appendChild(newRow);
 
     // Handle Start button click
+    const inputField = newRow.querySelector("input");
     const startBtn = newRow.querySelector(".start-btn");
     const editBtn = newRow.querySelector('.edit-btn');
     startBtn.addEventListener("click", () => {
-        const inputField = newRow.querySelector("input");
         const newPlayers = inputField.value.trim();
 
         if (newPlayers === "" || newPlayers.split(",").length != 4) {
@@ -398,5 +398,6 @@ function showEmptySummaryMessage() {
 
     summaryBody.appendChild(row);
 }
+
 
 
