@@ -205,6 +205,7 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
         </td>
         <td>
             <button class="start-btn" style="padding: 6px 12px;">Start</button>
+            <button class="edit-btn hide-edit" style="padding: 6px 12px;">Edit</button>
         </td>
     `;
 
@@ -228,8 +229,56 @@ function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
 
         // Remove start button
         startBtn.remove();
+        editBtn.classList.remove("hide-edit");
+        editBtn.classList.add("show-edit");
 
         updateGameSummaryTable(selectedPlayers);
+    });
+
+    editBtn.addEventListener("click", () => {
+        // Get the Players <td> in this specific row
+        const playersTd = newRow.querySelector("td:nth-child(3)");
+        const currentPlayers = playersTd.textContent.trim();
+
+        // Replace the text with an input field so user can edit
+        playersTd.innerHTML = `
+            <input type="text" value="${currentPlayers}" style="width: 100%; padding: 6px; margin-bottom: 0;" />
+        `;
+
+        // Hide Edit button, show Start again
+        editBtn.classList.add("hide-edit");
+        editBtn.classList.remove("show-edit");
+
+        // Create a new Start button (to save changes)
+        const newStartBtn = document.createElement("button");
+        newStartBtn.textContent = "Start";
+        newStartBtn.classList.add("start-btn");
+        newStartBtn.style.padding = "6px 12px";
+
+        // Append Start button back to actions cell
+        const actionsTd = newRow.querySelector("td:last-child");
+        actionsTd.appendChild(newStartBtn);
+
+        // Reattach the "save" behavior
+        newStartBtn.addEventListener("click", () => {
+            const input = playersTd.querySelector("input");
+            const newPlayers = input.value.trim();
+
+            if (newPlayers === "") {
+                alert("Player list cannot be empty.");
+                return;
+            }
+
+            // Replace input with the new player names text
+            playersTd.textContent = newPlayers;
+
+            // Hide Start, show Edit again
+            newStartBtn.remove();
+            editBtn.classList.remove("hide-edit");
+            editBtn.classList.add("show-edit");
+
+            updateGameSummaryTable();
+        });
     });
 }
 
@@ -348,3 +397,4 @@ function showEmptySummaryMessage() {
 
     summaryBody.appendChild(row);
 }
+
