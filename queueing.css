@@ -82,11 +82,45 @@ table {
     box-shadow: var(--shadow);
     border-radius: var(--radius);
     overflow: hidden;
-    margin-top: 20px;
 }
 
+.game-table-container {
+  max-height: 250px; /* scroll threshold */
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+    margin: 25px 0;
+}
+
+/* Make the header sticky */
+.game-table-class thead th {
+  position: sticky;
+  top: 0;
+  background: #f4f4f4; /* header background */
+  z-index: 2;
+  text-align: left;
+}
+
+.game-table-class thead th:first-child {
+  width: 20px;
+}
+
+/* Optional: style for table */
+.game-table-class {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.game-table-class th, .game-table-class td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+
+
 th, td {
-    padding: 12px 16px;
+    padding: 8px 16px;
     text-align: left;
     border-bottom: 1px solid var(--border);
     color: var(--text-primary);
@@ -105,12 +139,19 @@ label {
     font-size: 14px;
 }
 
-.game-table-class {
-    margin-top: 50px;
+.first-queue-class th:last-child {
+    width: 25%;
 }
 
-.game-summary-class {
-    margin-top: 50px;
+.players-list {
+    display: grid;
+    grid-template-columns: repeat(2, auto); /* 2 buttons per row */
+    gap: 10px;
+}
+
+.table-btn {
+    padding: 6px 12px;
+    height: 40px;
 }
 
 .hide-edit {
@@ -120,6 +161,21 @@ label {
 .show-btn {
     display: inline-block;
 }
+
+.modal {
+  position: fixed;
+  top: 0; left: 0; right:0; bottom:0;
+  background: rgba(0,0,0,0.5);
+  display: flex; justify-content: center; align-items: center;
+  z-index: 99;
+}
+.modal-content {
+  background: #fff; padding: 20px; border-radius: 8px; min-width: 200px;
+}
+.modal-content ul { list-style:none; padding:0; }
+.modal-content li { padding: 8px; cursor: pointer; }
+.modal-content li:hover { background: #f0f0f0; }
+.close { cursor: pointer; float: right; font-size: 20px; }
 
 .notification {
     display: none;

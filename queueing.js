@@ -1,403 +1,379 @@
+// === Core Game Generation ===
 async function generateFirstGame() {
+    const numCourts = +getNumCourtsFromSettings();
+    const playersRange = getPlayersFromSettings();
 
-    let numCourts = getNumCourtsFromSettings();
-    let playersRange = getPlayersFromSettings();
-
-    // Check if players or courts are missing
-    if (playersRange.length === 0 || numCourts === "" || numCourts <= 0) {
+    if (playersRange.length === 0 || !numCourts) {
         showNotification("Please ensure that the player list and number of courts are properly filled out.");
-        return; // Stop execution if validation fails
+        return;
     }
 
     document.querySelectorAll('.placeholder-row').forEach(row => row.remove());
 
-    let courtNumber, gameNumber;
-    let availablePlayers = [];
-    let gameCount = {};
-
-    // Load players from the settings sheet
-    playersRange.forEach(player => {
-        if (player.trim() !== "") {
-            availablePlayers.push(player);
-            gameCount[player] = 0;
-        }
-    });
-
-    // Identify players already queued in unstarted games
-    let reservedPlayers = new Set();
-    let lastUnstartedGamePlayers = [];
-
-    const rows = document.querySelectorAll("#gameTable tbody tr");
-    for (let i = rows.length - 1; i >= 0; i--) {
-        const row = rows[i];
-        const input = row.cells[2]?.querySelector("input");
-
-        if (input) {
-            const names = input.value.split(",").map(name => name.trim()).filter(Boolean);
-            names.forEach(name => reservedPlayers.add(name));
-
-            // Save the most recent unstarted game's players
-            if (lastUnstartedGamePlayers.length === 0) {
-                lastUnstartedGamePlayers = [...names];
-            }
-        }
-    }
-
-    // Build preferred and fallback lists without mutating availablePlayers
-    let preferredPlayers = [];
-    let fallbackPlayers = [];
-
-    playersRange.forEach(player => {
-        if (!player) return;
-
-        const isReserved = reservedPlayers.has(player);
-        const isInLastUnstarted = lastUnstartedGamePlayers.includes(player);
-
-        if (!isReserved) {
-            preferredPlayers.push(player);
-        } else if (!isInLastUnstarted) {
-            fallbackPlayers.push(player);
-        }
-    });
-
-    // Combine into final list of players to consider
-    availablePlayers = [...preferredPlayers, ...fallbackPlayers];
-
-    // Determine game number based on current rows in the game table
-    const existingGames = rows.length;
-    gameNumber = existingGames + 1;
-
-    // Use round-robin court allocation (1 to numCourts)
-    courtNumber = (gameNumber - 1) % numCourts + 1;
-
-    // Build game count from existing table rows
-    rows.forEach(row => {
-        const playersCell = row.cells[2]; // 3rd column = index 2
-        if (!playersCell) return;
-        const names = playersCell.textContent.split(",");
-        names.forEach(p => {
-            p = p.trim();
-            if (gameCount[p] !== undefined) {
-                gameCount[p] += 1;
-            }
-        });
-    });
-
-    // Find min games played
-    const minCount = Math.min(...Object.values(gameCount));
-
-    console.log('$$availablePlayers', availablePlayers);
-    // Collect players with the lowest game count
-    let selectedIndexes = [];
-    availablePlayers.forEach((player, i) => {
-        if (gameCount[player] === minCount) {
-            selectedIndexes.push(i);
-        }
-    });
-
-    // Track last played row index (relative to games in the table)
-    let lastPlayedRow = {};
-    playersRange.forEach(player => {
-        if (player.trim() !== "") {
-            lastPlayedRow[player] = -1; // -1 means never played
-        }
-    });
-
-    rows.forEach((row, rowIndex) => {
-        const playersCell = row.cells[2];
-        if (!playersCell) return;
-        const names = playersCell.textContent.split(",");
-        names.forEach(p => {
-            p = p.trim();
-            if (lastPlayedRow[p] !== undefined) {
-                lastPlayedRow[p] = rowIndex;
-            }
-        });
-    });
-
-    // Combine least played with longest waiting if needed
-    let usedIndexes = [];
-    let priorityIndexes = [...selectedIndexes];
-
-    if (priorityIndexes.length < 4) {
-        let playerWaitTime = {};
-        availablePlayers.forEach((player, i) => {
-            if (!alreadyUsedIndex(priorityIndexes, i)) {
-                const lastRow = lastPlayedRow[player];
-                playerWaitTime[i] = rows.length - (lastRow === -1 ? -1 : lastRow);
-            }
-        });
-
-        const sortedIndexes = sortDictionaryByValueDescending(playerWaitTime);
-        sortedIndexes.forEach(i => {
-            if (priorityIndexes.length >= 4) return;
-            priorityIndexes.push(i);
-        });
-    }
-
-    // Final: pick 4 players from priorityIndexes randomly
-    let selectedPlayers = [];
-    for (let i = 0; i < 4; i++) {
-        let idx;
-        do {
-            idx = Math.floor(Math.random() * priorityIndexes.length);
-        } while (alreadyUsedIndex(usedIndexes, priorityIndexes[idx]));
-
-        usedIndexes.push(priorityIndexes[idx]);
-        selectedPlayers[i] = availablePlayers[priorityIndexes[idx]];
-    }
-
-    // Output to Queueing sheet
-    await outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers);
-    
-    updateGameSummaryTable(selectedPlayers);
-}
-
-// Helper: check if index is already selected
-function alreadyUsedIndex(col, val) {
-    return col.includes(val);
-}
-
-// Sort dictionary by value descending, return key array
-function sortDictionaryByValueDescending(dict) {
-    return Object.keys(dict)
-        .sort((a, b) => dict[b] - dict[a]);
-}
-
-function getPlayersFromSettings() {
-    const playersInput = document.getElementById('players').value;
-    return playersInput.split(',').map(name => name.trim()).filter(name => name);
-}
-
-function getGameDateFromSettings() {
-    return document.getElementById('gameDate').value;
-}
-
-function getLocationFromSettings() {
-    return document.getElementById('location').value;
-}
-
-function getNumCourtsFromSettings() {
-    return document.getElementById('numCourts').value;
-}
-
-function getNumCourtsFromSettings() {
-    const numCourts = document.getElementById('numCourts').value;
-    return numCourts;
-}
-
-function alreadyUsedIndex(col, val) {
-    return col.includes(val);
-}
-
-function sortDictionaryByValueDescending(dict) {
-    return Object.keys(dict).sort((a, b) => dict[b] - dict[a]);
-}
-
-function outputToQueueingSheet(gameNumber, courtNumber, selectedPlayers) {
-    const newRow = document.createElement("tr");
-
-    newRow.innerHTML = `
-        <td>${gameNumber}</td>
-        <td>${courtNumber}</td>
-        <td>
-            <input type="text" value="${selectedPlayers.join(', ')}" style="width: 100%; padding: 6px; margin-bottom: 0;" />
-        </td>
-        <td>
-            <button class="start-btn" style="padding: 6px 12px;">Start</button>
-        </td>
-    `;
-
     const gameTableBody = document.querySelector("#gameTable tbody");
-    gameTableBody.appendChild(newRow);
+    const rows = Array.from(gameTableBody.querySelectorAll("tr"));
+    const gameNumber = rows.length + 1;
+    const courtNumber = (gameNumber - 1) % numCourts + 1;
 
-    // Handle Start button click
-    const inputField = newRow.querySelector("input");
-    const startBtn = newRow.querySelector(".start-btn");
-    //const editBtn = newRow.querySelector('.edit-btn');
-    startBtn.addEventListener("click", () => {
-        const newPlayers = inputField.value.trim();
+    // === Build stats ===
+    const playerStats = {};
+    playersRange.forEach(p => {
+        playerStats[p] = { gamesPlayed: 0, lastPlayedIndex: -1 };
+    });
 
-        if (newPlayers === "" || newPlayers.split(",").length != 4) {
-            showNotification("Player list must have 4 players.");
+    // Build match history
+    const matchHistory = {};
+    playersRange.forEach(p => (matchHistory[p] = {}));
+
+    rows.forEach((row, index) => {
+        const players = row.cells[1]?.textContent.split(",").map(p => p.trim()).filter(Boolean);
+        players.forEach(p => {
+            if (playerStats[p]) {
+                playerStats[p].gamesPlayed++;
+                playerStats[p].lastPlayedIndex = index;
+            }
+        });
+        // Record pairings
+        for (let i = 0; i < players.length; i++) {
+            for (let j = i + 1; j < players.length; j++) {
+                const a = players[i];
+                const b = players[j];
+                if (!matchHistory[a][b]) matchHistory[a][b] = 0;
+                if (!matchHistory[b][a]) matchHistory[b][a] = 0;
+                matchHistory[a][b]++;
+                matchHistory[b][a]++;
+            }
+        }
+    });
+
+    // === Sort by fairness first ===
+    const sortedPlayers = [...playersRange].sort((a, b) => {
+        const aStats = playerStats[a];
+        const bStats = playerStats[b];
+        if (aStats.gamesPlayed !== bStats.gamesPlayed)
+            return aStats.gamesPlayed - bStats.gamesPlayed;
+        return aStats.lastPlayedIndex - bStats.lastPlayedIndex;
+    });
+
+    // === Choose 4 players minimizing repeat matchups ===
+    let bestGroup = null;
+    let bestScore = Infinity;
+
+    const combinations = getCombinations(sortedPlayers, 4);
+    for (const combo of combinations) {
+        // Score = fairness weight + matchup weight
+        const fairnessScore = combo.reduce((s, p) => s + playerStats[p].gamesPlayed, 0);
+        let matchupScore = 0;
+        for (let i = 0; i < combo.length; i++) {
+            for (let j = i + 1; j < combo.length; j++) {
+                matchupScore += matchHistory[combo[i]][combo[j]] || 0;
+            }
+        }
+        const totalScore = fairnessScore * 2 + matchupScore * 3; // adjust weights
+        if (totalScore < bestScore) {
+            bestScore = totalScore;
+            bestGroup = combo;
+        }
+    }
+
+    const selectedPlayers = bestGroup || sortedPlayers.slice(0, 4);
+
+    outputToQueueingSheet(selectedPlayers, gameNumber);
+    updateGameSummaryTable(selectedPlayers, gameNumber);
+}
+
+// === Utility to get combinations of N elements ===
+function getCombinations(arr, n) {
+    const result = [];
+    const f = (prefix, start) => {
+        if (prefix.length === n) {
+            result.push(prefix);
             return;
         }
-
-        // Replace input with text
-        const td = inputField.parentElement;
-        td.textContent = newPlayers;
-
-        // Remove start button
-        startBtn.remove();
-        //editBtn.classList.remove("hide-edit");
-        //editBtn.classList.add("show-edit");
-
-        updateGameSummaryTable(selectedPlayers);
-    });
-
-    /*editBtn.addEventListener("click", () => {
-        // Get the Players <td> in this specific row
-        const playersTd = newRow.querySelector("td:nth-child(3)");
-        const currentPlayers = playersTd.textContent.trim();
-
-        // Replace the text with an input field so user can edit
-        playersTd.innerHTML = `
-            <input type="text" value="${currentPlayers}" style="width: 100%; padding: 6px; margin-bottom: 0;" />
-        `;
-
-        // Hide Edit button, show Start again
-        editBtn.classList.add("hide-edit");
-        editBtn.classList.remove("show-edit");
-
-        // Create a new Start button (to save changes)
-        const newStartBtn = document.createElement("button");
-        newStartBtn.textContent = "Start";
-        newStartBtn.classList.add("start-btn");
-        newStartBtn.style.padding = "6px 12px";
-
-        // Append Start button back to actions cell
-        const actionsTd = newRow.querySelector("td:last-child");
-        actionsTd.appendChild(newStartBtn);
-
-        // Reattach the "save" behavior
-        newStartBtn.addEventListener("click", () => {
-            const input = playersTd.querySelector("input");
-            const newPlayers = input.value.trim();
-
-            if (newPlayers === "") {
-                alert("Player list cannot be empty.");
-                return;
-            }
-
-            // Replace input with the new player names text
-            playersTd.textContent = newPlayers;
-
-            // Hide Start, show Edit again
-            newStartBtn.remove();
-            editBtn.classList.remove("hide-edit");
-            editBtn.classList.add("show-edit");
-
-            updateGameSummaryTable();
-        });
-    });*/
+        for (let i = start; i < arr.length; i++) {
+            f([...prefix, arr[i]], i + 1);
+        }
+    };
+    f([], 0);
+    return result;
 }
 
-function updateGameSummaryTable(selectedPlayers) {
+
+// === Table Output ===
+function outputToQueueingSheet(selectedPlayers, gameNumber) {
+    const tbody = document.querySelector("#gameTable tbody");
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+        <td>${gameNumber}</td>
+        <td>${selectedPlayers.join(", ")}</td>
+        <td>
+            <button class="start-btn" style="padding:6px;margin:3px;width:60px;">Start</button>
+            <button class="edit-btn" style="padding:6px;margin:3px;width:60px;">Edit</button>
+        </td>
+    `;
+    tbody.appendChild(row);
+
+    const startBtn = row.querySelector(".start-btn");
+    const editBtn = row.querySelector(".edit-btn");
+
+    startBtn.addEventListener("click", () => {
+        startBtn.remove();
+        updateGameSummaryTable(selectedPlayers, gameNumber);
+    });
+
+    editBtn.addEventListener("click", () => editRow(row, gameNumber));
+
+    // 🔹 Scroll to the last entry
+    row.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+let editingRow = null;
+let currentButton = null;
+
+// === Editing Functions ===
+function editRow(row, gameNumber) {
+    if (editingRow) return;
+    editingRow = row;
+
+    const playersCell = row.cells[1];
+    const actionsCell = row.cells[2];
+    const currentPlayers = playersCell.textContent.split(",").map(p => p.trim());
+
+    playersCell.innerHTML = `
+        <div class="players-list">
+            ${[0, 1, 2, 3].map(i =>
+                `<button class="table-btn" onclick="replacePlayer(event)">${currentPlayers[i] || "name" + (i + 1)}</button>`
+            ).join("")}
+        </div>
+    `;
+
+    actionsCell.innerHTML = `
+        <button class="save-btn" style="padding:6px;margin:3px;width:60px;" onclick="saveQueueInline(${gameNumber})">Save</button>
+        <button class="cancel-btn" style="padding:6px;margin:3px;width:60px;" onclick="cancelEdit(${gameNumber})">Cancel</button>
+    `;
+}
+
+function saveQueueInline(gameNumber) {
+    const row = editingRow;
+    if (!row) return;
+
+    const playersCell = row.cells[1];
+    const selectedPlayers = Array.from(row.querySelectorAll(".table-btn"))
+        .map(btn => btn.textContent.trim())
+        .filter(Boolean);
+
+    if (selectedPlayers.length !== 4) {
+        alert("Please select 4 players before saving.");
+        return;
+    }
+
+    // ✅ Update player names in the table
+    playersCell.textContent = selectedPlayers.join(", ");
+
+    // ✅ Rebuild the Actions cell
+    const actionsCell = row.cells[2];
+    actionsCell.innerHTML = `
+        <button class="start-btn" style="padding:6px;margin:3px;width:60px;">Start</button>
+        <button class="edit-btn" style="padding:6px;margin:3px;width:60px;">Edit</button>
+    `;
+
+    const startBtn = actionsCell.querySelector(".start-btn");
+    const editBtn = actionsCell.querySelector(".edit-btn");
+
+    // ✅ Start button — no longer responsible for summary refresh
+    startBtn.addEventListener("click", () => {
+        startBtn.remove(); // game marked as started
+        // no updateGameSummaryTable here — handled in Save
+    });
+
+    // ✅ Edit button — to reopen for editing
+    editBtn.addEventListener("click", () => editRow(row, gameNumber));
+
+    // ✅ Update the summary table for only this game
+    updateGameSummaryTable(selectedPlayers, gameNumber);
+
+    // ✅ Remove yellow border highlight from summary for this game
+    const summaryBody = document.getElementById("summaryBody");
+    const lastGameColIndex = gameNumber + 1; // +1 because "Player" + "Total" columns come first
+    Array.from(summaryBody.querySelectorAll("tr")).forEach(tr => {
+        const td = tr.cells[lastGameColIndex];
+        if (td && td.style.borderColor === "rgb(242, 221, 35)") {
+            td.style.border = "none";
+        }
+    });
+
+    // ✅ Clear edit tracking
+    editingRow = null;
+}
+
+function cancelEdit(gameNumber) {
+    if (!editingRow) return;
+    const row = editingRow;
+    const playersCell = row.cells[1];
+    const actionsCell = row.cells[2];
+
+    const currentButtons = row.querySelectorAll(".table-btn");
+    const originalPlayers = Array.from(currentButtons).map(btn => btn.textContent.trim());
+
+    playersCell.textContent = originalPlayers.join(", ");
+    actionsCell.innerHTML = `
+        <button class="start-btn" style="padding:6px;margin:3px;width:60px;">Start</button>
+        <button class="edit-btn" style="padding:6px;margin:3px;width:60px;">Edit</button>
+    `;
+
+    const startBtn = actionsCell.querySelector(".start-btn");
+    const editBtn = actionsCell.querySelector(".edit-btn");
+    startBtn.addEventListener("click", () => {
+        startBtn.remove();
+        updateGameSummaryTable(originalPlayers, gameNumber);
+    });
+    editBtn.addEventListener("click", () => editRow(row, gameNumber));
+
+    editingRow = null;
+}
+
+// === Modal Player Selection ===
+function replacePlayer(event) {
+    currentButton = event.target;
+    const playerModal = document.getElementById("playerModal");
+    playerModal.style.display = "flex";
+
+    const playerList = document.getElementById("playerList");
+    playerList.innerHTML = "";
+    const allPlayers = getPlayersFromSettings();
+    const currentPlayers = Array.from(document.querySelectorAll(".table-btn")).map(b => b.textContent.trim());
+
+    allPlayers.forEach(player => {
+        const li = document.createElement("li");
+        li.textContent = player;
+        li.style.cursor = "pointer";
+
+        if (currentPlayers.includes(player) && player !== currentButton.textContent.trim()) {
+            li.style.opacity = "0.5";
+            li.style.pointerEvents = "none";
+        } else {
+            li.onclick = () => selectPlayer(li);
+        }
+        playerList.appendChild(li);
+    });
+}
+
+function closeModal() {
+    document.getElementById("playerModal").style.display = "none";
+}
+
+function selectPlayer(li) {
+    if (currentButton) {
+        const oldName = currentButton.textContent;
+        currentButton.textContent = li.textContent;
+        highlightChangedPlayer(oldName, li.textContent);
+    }
+    closeModal();
+}
+
+// === Highlight Updated Player ===
+function highlightChangedPlayer(oldName, newName) {
+    const summaryBody = document.getElementById("summaryBody");
+    const rows = summaryBody.querySelectorAll("tr");
+
+    const gameTableBody = document.querySelector("#gameTable tbody");
+    const lastGameColIndex = gameTableBody.rows.length + 1; // Player + Total offset
+
+    rows.forEach(tr => {
+        const playerName = tr.cells[0].textContent.trim();
+        if (playerName === newName) {
+            const td = tr.cells[lastGameColIndex];
+            if (td) {
+                td.style.border = "2px solid #f2dd23";
+            }
+        }
+    });
+}
+
+// === Summary Table Update ===
+function updateGameSummaryTable(selectedPlayers, gameNumber) {
     const gameTableBody = document.querySelector("#gameTable tbody");
     const summaryHeader = document.getElementById("summaryHeader");
     const summaryBody = document.getElementById("summaryBody");
-
     const rows = gameTableBody.querySelectorAll("tr");
+    const targetRow = rows[gameNumber - 1];
+    if (!targetRow) return;
 
-    // Build set of all players
-    const playerSet = getPlayersFromSettings();
-    // rows.forEach(row => {
-    //     const players = row.cells[2].textContent.split(',').map(p => p.trim());
-    //     players.forEach(p => playerSet.add(p));
-    // });
-    console.log('$$playerSet -->', playerSet);
-    const allPlayers = Array.from(playerSet).sort(); // Optional: sorted player list
-    const gameCount = rows.length;
+    const allPlayers = new Set(getPlayersFromSettings());
+    rows.forEach(row => {
+        const text = row.cells[1]?.textContent.trim() || "";
+        text.split(",").map(p => p.trim()).forEach(p => allPlayers.add(p));
+    });
 
-    // Clear existing header and rows
-    summaryHeader.innerHTML = '<th>Player</th><th>Total</th>'; // 👈 Added Total column
-    summaryBody.innerHTML = '';
+    const sortedPlayers = Array.from(allPlayers).sort();
 
-    // Build header row for each game
-    for (let i = 1; i <= gameCount; i++) {
-        const th = document.createElement('th');
-        th.textContent = `${i}`;
-        th.style.width = '42.5px';
-        th.style.padding = '12px 0';
-        th.style.textAlign = 'center';
+    // Ensure header for this game number
+    if (summaryHeader.children.length <= gameNumber + 1) {
+        const th = document.createElement("th");
+        th.textContent = gameNumber;
+        th.style.width = "42.5px";
+        th.style.textAlign = "center";
         summaryHeader.appendChild(th);
     }
 
-    // Build rows for each player
-    allPlayers.forEach(player => {
-        const tr = document.createElement('tr');
+    sortedPlayers.forEach(player => {
+        let tr = Array.from(summaryBody.children).find(r => r.cells[0].textContent === player);
+        if (!tr) {
+            tr = document.createElement("tr");
+            tr.innerHTML = `<td>${player}</td><td style="text-align:center">0</td>`;
+            summaryBody.appendChild(tr);
+        }
 
-        // Player name cell
-        const nameCell = document.createElement('td');
-        nameCell.textContent = player;
-        tr.appendChild(nameCell);
-
-        // Total games played cell
-        let totalGames = 0;
-        rows.forEach(row => {
-            let playersInGame = [];
-            const playersCell = row.cells[2];
-            const input = playersCell.querySelector("input");
-            if (input) {
-                playersInGame = input.value.split(',').map(p => p.trim());
-            } else {
-                playersInGame = playersCell.textContent.split(',').map(p => p.trim());
-            }
-
-            if (playersInGame.includes(player)) {
-                totalGames++;
-            }
-        });
-        const totalCell = document.createElement('td');
-        totalCell.textContent = totalGames;
-        totalCell.style.textAlign = "center";
-        tr.appendChild(totalCell);
-
-        // Cells for each game
-        rows.forEach(row => {
-            const td = document.createElement('td');
-
-            let playersInGame = [];
-            const playersCell = row.cells[2];
-            const input = playersCell.querySelector("input");
-            if (input) {
-                playersInGame = input.value.split(',').map(p => p.trim());
-            } else {
-                playersInGame = playersCell.textContent.split(',').map(p => p.trim());
-            }
-
-            const isGameStarted = !row.cells[2].querySelector("input");
-
-            if (playersInGame.includes(player)) {
-                td.style.backgroundColor = isGameStarted ? '#a18cbc' : '#c4c3d0';
-                td.style.width = '42.5px';
-                td.style.padding = '12px 0';
-            }
-
+        let td = tr.cells[gameNumber + 1];
+        if (!td) {
+            td = document.createElement("td");
+            td.style.width = "42.5px";
+            td.style.textAlign = "center";
             tr.appendChild(td);
-        });
+        }
 
-        summaryBody.appendChild(tr);
+        const playersInGame = targetRow.cells[1].textContent.split(",").map(p => p.trim());
+        const startBtn = targetRow.querySelector(".start-btn");
+        td.style.backgroundColor = playersInGame.includes(player)
+            ? (startBtn ? "#c4c3d0" : "#a18cbc")
+            : "";
+
+        // Update total count
+        const total = Array.from(rows).reduce((count, row) => {
+            const names = row.cells[1].textContent.split(",").map(p => p.trim());
+            return count + (names.includes(player) ? 1 : 0);
+        }, 0);
+        tr.cells[1].textContent = total;
     });
+
+    scrollSummaryToLastGame();
 }
 
+function scrollSummaryToLastGame() {
+    const summaryContainer = document.querySelector(".summary-container"); // wrap table in a scrollable div
+    const summaryHeader = document.getElementById("summaryHeader");
+    if (!summaryHeader) return;
 
-function showNotification(message) {
-    const notification = document.getElementById("notification");
-    notification.textContent = message;
-    notification.classList.add("show");
-
-    // Automatically hide the notification after 3 seconds
-    setTimeout(() => {
-        notification.classList.remove("show");
-    }, 3000);
+    // Get the last TH (latest game)
+    const lastTh = summaryHeader.lastElementChild;
+    if (lastTh && summaryContainer) {
+        // Scroll horizontally so the last column is visible
+        const offsetLeft = lastTh.offsetLeft + lastTh.offsetWidth;
+        summaryContainer.scrollLeft = offsetLeft - summaryContainer.clientWidth;
+    }
 }
 
-function showEmptySummaryMessage() {
-    const summaryBody = document.getElementById("summaryBody");
-    summaryBody.innerHTML = ""; // Clear previous content
-
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 3;
-    cell.textContent = "No summary available";
-    cell.style.textAlign = "center";
-    cell.style.fontStyle = "italic";
-    row.appendChild(cell);
-
-    summaryBody.appendChild(row);
+// === Utility ===
+function getPlayersFromSettings() {
+    return document.getElementById("players").value.split(",").map(n => n.trim()).filter(Boolean);
 }
-
-
-
-
+function getNumCourtsFromSettings() {
+    return document.getElementById("numCourts").value;
+}
+function showNotification(msg) {
+    const n = document.getElementById("notification");
+    n.textContent = msg;
+    n.classList.add("show");
+    setTimeout(() => n.classList.remove("show"), 3000);
+}
