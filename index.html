@@ -15,7 +15,7 @@
 
         <!-- Game Settings Form -->
         <label for="players">Enter players (comma separated):</label>
-        <input type="text" id="players" placeholder="Player1, Player2, Player3, Player4, ...">
+        <input type="text" id="players" placeholder="Player1, Player2, Player3, Player4, ..." oninput="this.value = this.value.tolowerCase()">
 
         <!-- <label for="gameDate">Game Date:</label>
         <input type="date" id="gameDate">
@@ -31,47 +31,60 @@
         <button onclick="generateFirstGame()" class="header-bar">Generate Game</button>
 
         <!-- Game Results Table -->
-        <table id="gameTable" class="game-table-class">
-            <thead>
-				<tr>
-					<th>Game #</th>
-					<th>Court #</th>
-					<th>Players</th>
-					<th>Actions</th>
-				</tr>
-			</thead>			
-            <tbody>
-                <!-- Game result will appear here -->
-            </tbody>
-        </table>
+		<div class="game-table-container">
+			<table id="gameTable" class="game-table-class">
+				<thead>
+					<tr>
+						<th>G#</th>
+						<!-- <th>Court #</th> -->
+						<th>Players</th>
+						<th>Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+				</tbody>
+			</table>
+		</div>
 
-        <table id="gameSummary" class="game-summary-class">
-			<thead>
-				<tr id="summaryHeader">
-					<th>Player</th>
-					<th>Total</th>
-					<th>Game #</th>
-					<!-- Game columns will be added dynamically -->
-				</tr>
-			</thead>
-			<tbody id="summaryBody">
-				<!-- Player rows will be added dynamically -->
-			</tbody>
-		</table>		
+		<!-- Modal -->
+		<div id="playerModal" class="modal" style="display:none;">
+			<div class="modal-content">
+				<span class="close" onclick="closeModal()">&times;</span>
+				<h3>Select a Player</h3>
+				<ul id="playerList">
+				</ul>
+			</div>
+		</div>
+
+		<div class="summary-container" style="overflow-x:auto;">
+			<table id="gameSummary" class="game-summary-class">
+				<thead>
+					<tr id="summaryHeader">
+						<th>Player</th>
+						<th>Total</th>
+						<th>1</th>
+						<!-- Game columns will be added dynamically -->
+					</tr>
+				</thead>
+				<tbody id="summaryBody">
+					<!-- Player rows will be added dynamically -->
+				</tbody>
+			</table>
+		</div>
     </div>
 
 	<script>
 		document.addEventListener('DOMContentLoaded', () => {
 			const gameTableBody = document.querySelector('#gameTable tbody');
 			const summaryBody = document.querySelector('#summaryBody');
-		
+
 			if (gameTableBody.children.length === 0) {
 				const placeholder = document.createElement('tr');
 				placeholder.classList.add('placeholder-row');
 				placeholder.innerHTML = `<td colspan="4" style="text-align:center; color: #7A7A7A;">No game data available</td>`;
 				gameTableBody.appendChild(placeholder);
 			}
-		
+
 			if (summaryBody.children.length === 0) {
 				const placeholder = document.createElement('tr');
 				placeholder.classList.add('placeholder-row');
@@ -80,6 +93,6 @@
 			}
 		});
 	</script>
-		
+
 </body>
 </html>
