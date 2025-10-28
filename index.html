@@ -15,7 +15,7 @@
 
         <!-- Game Settings Form -->
         <label for="players">Enter players (comma separated):</label>
-        <input type="text" id="players" placeholder="Player1, Player2, Player3, Player4, ..." oninput="this.value = this.value.tolowerCase()">
+        <input type="text" id="players" placeholder="Player1, Player2, Player3, Player4, ..." oninput="this.value = this.value.toLowerCase()" onblur="checkPlayerChange(event)" onfocus="getInitialPlayerList(event)">
 
         <!-- <label for="gameDate">Game Date:</label>
         <input type="date" id="gameDate">
@@ -28,7 +28,7 @@
 
 		<div id="notification" class="notification"></div>
 
-        <button onclick="generateFirstGame()" class="header-bar">Generate Game</button>
+        <button onclick="generateGame()" class="header-bar">Generate Game</button>
 
         <!-- Game Results Table -->
 		<div class="game-table-container">
@@ -62,7 +62,6 @@
 					<tr id="summaryHeader">
 						<th>Player</th>
 						<th>Total</th>
-						<th>1</th>
 						<!-- Game columns will be added dynamically -->
 					</tr>
 				</thead>
