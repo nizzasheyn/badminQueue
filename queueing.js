@@ -1,103 +1,116 @@
-// === Core Game Generation ===
-async function generateFirstGame() {
-    const numCourts = +getNumCourtsFromSettings();
-    const playersRange = getPlayersFromSettings();
+let playersInitList = [];
+let playersNewList = [];
+let playerStats = {};
+let matchHistory = {};
+let tempPlayerStats = {};
+let tempMatchHistory = {};
 
-    if (playersRange.length === 0 || !numCourts) {
-        showNotification("Please ensure that the player list and number of courts are properly filled out.");
-        return;
-    }
+function checkPlayerChange (event) {
+    playersNewList = event.target.value.split(",").map(n => n.trim()).filter(Boolean).sort();
+    init();
+}
 
-    document.querySelectorAll('.placeholder-row').forEach(row => row.remove());
+function getInitialPlayerList (event) {
+    playersInitList = event.target.value.split(",").map(n => n.trim()).filter(Boolean).sort();
+}
 
-    const gameTableBody = document.querySelector("#gameTable tbody");
-    const rows = Array.from(gameTableBody.querySelectorAll("tr"));
-    const gameNumber = rows.length + 1;
-    const courtNumber = (gameNumber - 1) % numCourts + 1;
+function init() {
+    buildSummaryTable (playersNewList);
 
-    // === Build stats ===
-    const playerStats = {};
-    playersRange.forEach(p => {
+    playersNewList.forEach(p => {
         playerStats[p] = { gamesPlayed: 0, lastPlayedIndex: -1 };
     });
 
-    // Build match history
-    const matchHistory = {};
-    playersRange.forEach(p => (matchHistory[p] = {}));
+    playersNewList.forEach(p => (matchHistory[p] = {}));
+}
 
-    rows.forEach((row, index) => {
-        const players = row.cells[1]?.textContent.split(",").map(p => p.trim()).filter(Boolean);
-        players.forEach(p => {
-            if (playerStats[p]) {
-                playerStats[p].gamesPlayed++;
-                playerStats[p].lastPlayedIndex = index;
-            }
-        });
-        // Record pairings
-        for (let i = 0; i < players.length; i++) {
-            for (let j = i + 1; j < players.length; j++) {
-                const a = players[i];
-                const b = players[j];
-                if (!matchHistory[a][b]) matchHistory[a][b] = 0;
-                if (!matchHistory[b][a]) matchHistory[b][a] = 0;
-                matchHistory[a][b]++;
-                matchHistory[b][a]++;
-            }
-        }
-    });
+// === Core Game Generation ===
+function generateGame() {
+	const numCourts = +getNumCourtsFromSettings();
 
-    // === Sort by fairness first ===
-    const sortedPlayers = [...playersRange].sort((a, b) => {
-        const aStats = playerStats[a];
-        const bStats = playerStats[b];
-        if (aStats.gamesPlayed !== bStats.gamesPlayed)
-            return aStats.gamesPlayed - bStats.gamesPlayed;
-        return aStats.lastPlayedIndex - bStats.lastPlayedIndex;
-    });
+	if (playersNewList.length === 0 || !numCourts) {
+		showNotification("Please ensure that the player list and number of courts are properly filled out.");
+		return;
+	}
 
-    // === Choose 4 players minimizing repeat matchups ===
-    let bestGroup = null;
-    let bestScore = Infinity;
+	// 🧹 Remove placeholders if any
+	document.querySelectorAll('.placeholder-row').forEach(row => row.remove());
 
-    const combinations = getCombinations(sortedPlayers, 4);
-    for (const combo of combinations) {
-        // Score = fairness weight + matchup weight
-        const fairnessScore = combo.reduce((s, p) => s + playerStats[p].gamesPlayed, 0);
-        let matchupScore = 0;
-        for (let i = 0; i < combo.length; i++) {
-            for (let j = i + 1; j < combo.length; j++) {
-                matchupScore += matchHistory[combo[i]][combo[j]] || 0;
-            }
-        }
-        const totalScore = fairnessScore * 2 + matchupScore * 3; // adjust weights
-        if (totalScore < bestScore) {
-            bestScore = totalScore;
-            bestGroup = combo;
-        }
+	const gameTableBody = document.querySelector("#gameTable tbody");
+	const rows = Array.from(gameTableBody.querySelectorAll("tr"));
+	const gameNumber = rows.length + 1;
+	const courtNumber = (gameNumber - 1) % numCourts + 1;
+
+    if (!Object.keys(tempPlayerStats).length) {
+        tempPlayerStats = JSON.parse(JSON.stringify(playerStats));
+        tempMatchHistory = JSON.parse(JSON.stringify(matchHistory));
     }
 
-    const selectedPlayers = bestGroup || sortedPlayers.slice(0, 4);
+	// === Sort players by fairness (who’s played less / played less recently) ===
+	const sortedPlayers = [...playersNewList].sort((a, b) => {
+		const aStats = tempPlayerStats[a] || { gamesPlayed: 0, lastPlayedIndex: Infinity };
+		const bStats = tempPlayerStats[b] || { gamesPlayed: 0, lastPlayedIndex: Infinity };
 
-    outputToQueueingSheet(selectedPlayers, gameNumber);
-    updateGameSummaryTable(selectedPlayers, gameNumber);
+		if (aStats.gamesPlayed !== bStats.gamesPlayed)
+			return aStats.gamesPlayed - bStats.gamesPlayed;
+
+		return (aStats.lastPlayedIndex ?? Infinity) - (bStats.lastPlayedIndex ?? Infinity);
+	});
+
+	// === Choose 4 players minimizing repeat matchups ===
+	let bestGroup = null;
+	let bestScore = Infinity;
+	const combinations = getCombinations(sortedPlayers, 4);
+
+	for (const combo of combinations) {
+		// Fairness: total number of games played by this group
+		const fairnessScore = combo.reduce((sum, p) => sum + (tempPlayerStats[p]?.gamesPlayed || 0), 0);
+
+		// Matchup: how often these players have faced each other
+		let matchupScore = 0;
+		for (let i = 0; i < combo.length; i++) {
+			for (let j = i + 1; j < combo.length; j++) {
+				matchupScore += (tempMatchHistory[combo[i]]?.[combo[j]] || 0);
+			}
+		}
+
+		const totalScore = fairnessScore * 2 + matchupScore * 3; // tweak weights as needed
+		if (totalScore < bestScore) {
+			bestScore = totalScore;
+			bestGroup = combo;
+		}
+	}
+
+	const selectedPlayers = bestGroup || sortedPlayers.slice(0, 4);
+
+	// === ✅ Only now update stats & match history for the selected players ===
+    selectedPlayers.forEach(player => {
+		if (!tempPlayerStats[player]) {
+			tempPlayerStats[player] = { gamesPlayed: 0, lastPlayedIndex: -1 };
+		}
+		tempPlayerStats[player].gamesPlayed++;
+		tempPlayerStats[player].lastPlayedIndex = gameNumber;
+	});
+
+	for (let i = 0; i < selectedPlayers.length; i++) {
+		for (let j = i + 1; j < selectedPlayers.length; j++) {
+			const a = selectedPlayers[i];
+			const b = selectedPlayers[j];
+
+			if (!tempMatchHistory[a]) tempMatchHistory[a] = {};
+			if (!tempMatchHistory[b]) tempMatchHistory[b] = {};
+			if (!tempMatchHistory[a][b]) tempMatchHistory[a][b] = 0;
+			if (!tempMatchHistory[b][a]) tempMatchHistory[b][a] = 0;
+
+			tempMatchHistory[a][b]++;
+			tempMatchHistory[b][a]++;
+		}
+	}
+
+	// === Output results ===
+	outputToQueueingSheet(selectedPlayers, gameNumber);
+	updateGameSummaryTable(selectedPlayers, gameNumber);
 }
-
-// === Utility to get combinations of N elements ===
-function getCombinations(arr, n) {
-    const result = [];
-    const f = (prefix, start) => {
-        if (prefix.length === n) {
-            result.push(prefix);
-            return;
-        }
-        for (let i = start; i < arr.length; i++) {
-            f([...prefix, arr[i]], i + 1);
-        }
-    };
-    f([], 0);
-    return result;
-}
-
 
 // === Table Output ===
 function outputToQueueingSheet(selectedPlayers, gameNumber) {
@@ -119,13 +132,40 @@ function outputToQueueingSheet(selectedPlayers, gameNumber) {
 
     startBtn.addEventListener("click", () => {
         startBtn.remove();
-        updateGameSummaryTable(selectedPlayers, gameNumber);
+        handleOnStart(row, gameNumber);
+    });
+    editBtn.addEventListener("click", () => editRow(row, gameNumber));
+}
+
+function handleOnStart(row, gameNumber) {
+    const playersText = row.cells[1].textContent.trim();
+    const selectedPlayers = playersText.split(",").map(p => p.trim()).filter(Boolean);
+
+    // ✅ Update actual stats
+    selectedPlayers.forEach(player => {
+        if (!playerStats[player]) {
+            playerStats[player] = { gamesPlayed: 0, lastPlayedIndex: -1 };
+        }
+        playerStats[player].gamesPlayed++;
+        playerStats[player].lastPlayedIndex = gameNumber;
     });
 
-    editBtn.addEventListener("click", () => editRow(row, gameNumber));
+    for (let i = 0; i < selectedPlayers.length; i++) {
+        for (let j = i + 1; j < selectedPlayers.length; j++) {
+            const a = selectedPlayers[i];
+            const b = selectedPlayers[j];
 
-    // 🔹 Scroll to the last entry
-    row.scrollIntoView({ behavior: "smooth", block: "end" });
+            if (!matchHistory[a]) matchHistory[a] = {};
+            if (!matchHistory[b]) matchHistory[b] = {};
+            if (!matchHistory[a][b]) matchHistory[a][b] = 0;
+            if (!matchHistory[b][a]) matchHistory[b][a] = 0;
+
+            matchHistory[a][b]++;
+            matchHistory[b][a]++;
+        }
+    }
+
+    updateGameSummaryTable(selectedPlayers, gameNumber);
 }
 
 let editingRow = null;
@@ -143,16 +183,56 @@ function editRow(row, gameNumber) {
     playersCell.innerHTML = `
         <div class="players-list">
             ${[0, 1, 2, 3].map(i =>
-                `<button class="table-btn" onclick="replacePlayer(event)">${currentPlayers[i] || "name" + (i + 1)}</button>`
+                `<button class="table-btn" onclick="replacePlayer(event, ${gameNumber})">${currentPlayers[i] || "name" + (i + 1)}</button>`
             ).join("")}
         </div>
     `;
 
     actionsCell.innerHTML = `
         <button class="save-btn" style="padding:6px;margin:3px;width:60px;" onclick="saveQueueInline(${gameNumber})">Save</button>
-        <button class="cancel-btn" style="padding:6px;margin:3px;width:60px;" onclick="cancelEdit(${gameNumber})">Cancel</button>
     `;
 }
+
+function updateStatsAfterEdit(oldPlayers, newPlayers, gameNumber) {
+    // --- Step 1: Remove previous counts for old players ---
+    oldPlayers.forEach(player => {
+        if (playerStats[player]) {
+            playerStats[player].gamesPlayed = Math.max(0, playerStats[player].gamesPlayed - 1);
+            // Optional: adjust lastPlayedIndex if needed
+        }
+    });
+
+    for (let i = 0; i < oldPlayers.length; i++) {
+        for (let j = i + 1; j < oldPlayers.length; j++) {
+            const a = oldPlayers[i];
+            const b = oldPlayers[j];
+            if (matchHistory[a]?.[b]) matchHistory[a][b] = Math.max(0, matchHistory[a][b] - 1);
+            if (matchHistory[b]?.[a]) matchHistory[b][a] = Math.max(0, matchHistory[b][a] - 1);
+        }
+    }
+
+    // --- Step 2: Apply counts for new players ---
+    newPlayers.forEach((player, index) => {
+        if (!playerStats[player]) playerStats[player] = { gamesPlayed: 0, lastPlayedIndex: null };
+        playerStats[player].gamesPlayed++;
+        playerStats[player].lastPlayedIndex = gameNumber; // track game index
+    });
+
+    for (let i = 0; i < newPlayers.length; i++) {
+        for (let j = i + 1; j < newPlayers.length; j++) {
+            const a = newPlayers[i];
+            const b = newPlayers[j];
+            if (!matchHistory[a]) matchHistory[a] = {};
+            if (!matchHistory[b]) matchHistory[b] = {};
+            if (!matchHistory[a][b]) matchHistory[a][b] = 0;
+            if (!matchHistory[b][a]) matchHistory[b][a] = 0;
+
+            matchHistory[a][b]++;
+            matchHistory[b][a]++;
+        }
+    }
+}
+
 
 function saveQueueInline(gameNumber) {
     const row = editingRow;
@@ -184,7 +264,7 @@ function saveQueueInline(gameNumber) {
     // ✅ Start button — no longer responsible for summary refresh
     startBtn.addEventListener("click", () => {
         startBtn.remove(); // game marked as started
-        // no updateGameSummaryTable here — handled in Save
+        handleOnStart(row, gameNumber);
     });
 
     // ✅ Edit button — to reopen for editing
@@ -207,34 +287,34 @@ function saveQueueInline(gameNumber) {
     editingRow = null;
 }
 
-function cancelEdit(gameNumber) {
-    if (!editingRow) return;
-    const row = editingRow;
-    const playersCell = row.cells[1];
-    const actionsCell = row.cells[2];
+// function cancelEdit(gameNumber) {
+//     if (!editingRow) return;
+//     const row = editingRow;
+//     const playersCell = row.cells[1];
+//     const actionsCell = row.cells[2];
 
-    const currentButtons = row.querySelectorAll(".table-btn");
-    const originalPlayers = Array.from(currentButtons).map(btn => btn.textContent.trim());
+//     const currentButtons = row.querySelectorAll(".table-btn");
+//     const originalPlayers = Array.from(currentButtons).map(btn => btn.textContent.trim());
 
-    playersCell.textContent = originalPlayers.join(", ");
-    actionsCell.innerHTML = `
-        <button class="start-btn" style="padding:6px;margin:3px;width:60px;">Start</button>
-        <button class="edit-btn" style="padding:6px;margin:3px;width:60px;">Edit</button>
-    `;
+//     playersCell.textContent = originalPlayers.join(", ");
+//     actionsCell.innerHTML = `
+//         <button class="start-btn" style="padding:6px;margin:3px;width:60px;">Start</button>
+//         <button class="edit-btn" style="padding:6px;margin:3px;width:60px;">Edit</button>
+//     `;
 
-    const startBtn = actionsCell.querySelector(".start-btn");
-    const editBtn = actionsCell.querySelector(".edit-btn");
-    startBtn.addEventListener("click", () => {
-        startBtn.remove();
-        updateGameSummaryTable(originalPlayers, gameNumber);
-    });
-    editBtn.addEventListener("click", () => editRow(row, gameNumber));
+//     const startBtn = actionsCell.querySelector(".start-btn");
+//     const editBtn = actionsCell.querySelector(".edit-btn");
+//     startBtn.addEventListener("click", () => {
+//         startBtn.remove();
+//         handleOnStart(row, gameNumber);
+//     });
+//     editBtn.addEventListener("click", () => editRow(row, gameNumber));
 
-    editingRow = null;
-}
+//     editingRow = null;
+// }
 
 // === Modal Player Selection ===
-function replacePlayer(event) {
+function replacePlayer(event, gameNumber) {
     currentButton = event.target;
     const playerModal = document.getElementById("playerModal");
     playerModal.style.display = "flex";
@@ -253,7 +333,7 @@ function replacePlayer(event) {
             li.style.opacity = "0.5";
             li.style.pointerEvents = "none";
         } else {
-            li.onclick = () => selectPlayer(li);
+            li.onclick = () => selectPlayer(li,gameNumber);
         }
         playerList.appendChild(li);
     });
@@ -263,32 +343,80 @@ function closeModal() {
     document.getElementById("playerModal").style.display = "none";
 }
 
-function selectPlayer(li) {
+function selectPlayer(li, gameNumber) {
     if (currentButton) {
         const oldName = currentButton.textContent;
         currentButton.textContent = li.textContent;
-        highlightChangedPlayer(oldName, li.textContent);
+        highlightChangedPlayer(oldName, li.textContent, gameNumber);
     }
     closeModal();
 }
 
 // === Highlight Updated Player ===
-function highlightChangedPlayer(oldName, newName) {
+function highlightChangedPlayer(oldName, newName, gameNumber) {
     const summaryBody = document.getElementById("summaryBody");
     const rows = summaryBody.querySelectorAll("tr");
 
     const gameTableBody = document.querySelector("#gameTable tbody");
-    const lastGameColIndex = gameTableBody.rows.length + 1; // Player + Total offset
+    // const lastGameColIndex = gameTableBody.rows.length + 1; // Player + Total offset
 
     rows.forEach(tr => {
         const playerName = tr.cells[0].textContent.trim();
         if (playerName === newName) {
-            const td = tr.cells[lastGameColIndex];
+            const td = tr.cells[gameNumber + 1];
             if (td) {
                 td.style.border = "2px solid #f2dd23";
             }
         }
+
+        if (playerName === oldName) {
+            const td = tr.cells[gameNumber + 1];
+            if (td) {
+                td.style.backgroundColor = "";
+            }
+        }
     });
+}
+
+function buildSummaryTable() {
+    if (playersInitList !== playersNewList) {
+        const gameTableBody = document.querySelector("#gameTable tbody");
+        const summaryHeader = document.getElementById("summaryHeader");
+        const summaryBody = document.getElementById("summaryBody");
+
+		// 🧹 Remove placeholder row if present
+		const placeholder = summaryBody.querySelector(".placeholder-row");
+		if (placeholder) placeholder.remove();
+
+        playersNewList.forEach(player => {
+            // Check if player already exists in summary table
+            let tr = Array.from(summaryBody.children).find(r => r.cells[0].textContent === player);
+
+            // If not, create a new row for the player
+            if (!tr) {
+                tr = document.createElement("tr");
+                tr.innerHTML = `<td>${player}</td><td style="text-align:center">0</td>`;
+
+                // Find correct sorted position for the new player
+                const rows = Array.from(summaryBody.children);
+                let inserted = false;
+
+                for (let i = 0; i < rows.length; i++) {
+                    const existingName = rows[i].cells[0].textContent;
+                    if (player.localeCompare(existingName, undefined, { sensitivity: 'base' }) < 0) {
+                        summaryBody.insertBefore(tr, rows[i]); // insert in sorted order
+                        inserted = true;
+                        break;
+                    }
+                }
+
+                // If not inserted anywhere (i.e., player is last alphabetically)
+                if (!inserted) {
+                    summaryBody.appendChild(tr);
+                }
+            }
+        });
+    }
 }
 
 // === Summary Table Update ===
@@ -300,15 +428,6 @@ function updateGameSummaryTable(selectedPlayers, gameNumber) {
     const targetRow = rows[gameNumber - 1];
     if (!targetRow) return;
 
-    const allPlayers = new Set(getPlayersFromSettings());
-    rows.forEach(row => {
-        const text = row.cells[1]?.textContent.trim() || "";
-        text.split(",").map(p => p.trim()).forEach(p => allPlayers.add(p));
-    });
-
-    const sortedPlayers = Array.from(allPlayers).sort();
-
-    // Ensure header for this game number
     if (summaryHeader.children.length <= gameNumber + 1) {
         const th = document.createElement("th");
         th.textContent = gameNumber;
@@ -317,7 +436,14 @@ function updateGameSummaryTable(selectedPlayers, gameNumber) {
         summaryHeader.appendChild(th);
     }
 
-    sortedPlayers.forEach(player => {
+    const playersInGame = targetRow.cells[1].textContent
+        .split(",")
+        .map(p => p.trim())
+        .filter(Boolean);
+    const startBtn = targetRow.querySelector(".start-btn");
+
+    selectedPlayers.forEach(player => {
+        // Find or create player row
         let tr = Array.from(summaryBody.children).find(r => r.cells[0].textContent === player);
         if (!tr) {
             tr = document.createElement("tr");
@@ -325,21 +451,21 @@ function updateGameSummaryTable(selectedPlayers, gameNumber) {
             summaryBody.appendChild(tr);
         }
 
-        let td = tr.cells[gameNumber + 1];
-        if (!td) {
-            td = document.createElement("td");
+        while (tr.cells.length <= gameNumber + 1) {
+            const td = document.createElement("td");
             td.style.width = "42.5px";
             td.style.textAlign = "center";
             tr.appendChild(td);
         }
 
-        const playersInGame = targetRow.cells[1].textContent.split(",").map(p => p.trim());
-        const startBtn = targetRow.querySelector(".start-btn");
+        const td = tr.cells[gameNumber + 1];
+
+        // Apply highlight color only to this game column
         td.style.backgroundColor = playersInGame.includes(player)
             ? (startBtn ? "#c4c3d0" : "#a18cbc")
             : "";
 
-        // Update total count
+        // Update total appearances
         const total = Array.from(rows).reduce((count, row) => {
             const names = row.cells[1].textContent.split(",").map(p => p.trim());
             return count + (names.includes(player) ? 1 : 0);
@@ -347,7 +473,7 @@ function updateGameSummaryTable(selectedPlayers, gameNumber) {
         tr.cells[1].textContent = total;
     });
 
-    scrollSummaryToLastGame();
+    // scrollSummaryToLastGame();
 }
 
 function scrollSummaryToLastGame() {
@@ -356,7 +482,7 @@ function scrollSummaryToLastGame() {
     if (!summaryHeader) return;
 
     // Get the last TH (latest game)
-    const lastTh = summaryHeader.lastElementChild;
+        const lastTh = summaryHeader.lastElementChild;
     if (lastTh && summaryContainer) {
         // Scroll horizontally so the last column is visible
         const offsetLeft = lastTh.offsetLeft + lastTh.offsetWidth;
@@ -364,9 +490,24 @@ function scrollSummaryToLastGame() {
     }
 }
 
+
 // === Utility ===
+function getCombinations(arr, n) {
+    const result = [];
+    const f = (prefix, start) => {
+        if (prefix.length === n) {
+            result.push(prefix);
+            return;
+        }
+        for (let i = start; i < arr.length; i++) {
+            f([...prefix, arr[i]], i + 1);
+        }
+    };
+    f([], 0);
+    return result;
+}
 function getPlayersFromSettings() {
-    return document.getElementById("players").value.split(",").map(n => n.trim()).filter(Boolean);
+    return document.getElementById("players").value.split(",").map(n => n.trim()).filter(Boolean).sort();
 }
 function getNumCourtsFromSettings() {
     return document.getElementById("numCourts").value;
